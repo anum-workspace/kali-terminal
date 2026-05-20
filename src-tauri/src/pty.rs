@@ -1,11 +1,12 @@
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
-use std::io::Read;
+use std::io::{Read, Write};
 use tauri::{command, Emitter, State, Window};
 
 use crate::AppState;
 
 pub struct PtyManager {
     master: Option<Box<dyn portable_pty::MasterPty + Send>>,
+    writer: Option<Box<dyn Write + Send>>,
     _child: Option<Box<dyn portable_pty::Child + Send>>,
 }
 
@@ -13,6 +14,7 @@ impl PtyManager {
     pub fn new() -> Self {
         PtyManager {
             master: None,
+            writer: None,
             _child: None,
         }
     }
@@ -48,9 +50,11 @@ pub async fn pty_spawn(
 
     // Clone a reader from the master before storing it
     let reader = master.try_clone_reader().map_err(|e| e.to_string())?;
+    let writer = master.take_writer().map_err(|e| e.to_string())?;
 
     let mut pty = state.pty.lock().map_err(|_| "Lock poisoned")?;
     pty.master = Some(master);
+    pty.writer = Some(writer);
     pty._child = Some(child);
 
     // Spawn a thread to read raw PTY bytes. Shell prompts usually do not end
@@ -79,11 +83,17 @@ pub async fn pty_spawn(
 
 #[command]
 pub async fn pty_write(state: State<'_, AppState>, data: String) -> Result<(), String> {
-    let pty = state.pty.lock().map_err(|_| "Lock poisoned")?;
-    if let Some(ref master) = pty.master {
-        let mut writer = master.take_writer().map_err(|e| e.to_string())?;
-        std::io::Write::write_all(&mut writer, data.as_bytes()).map_err(|e| e.to_string())?;
-    }
+    let mut pty = state.pty.lock().map_err(|_| "Lock poisoned")?;
+    let writer = pty
+        .writer
+        .as_mut()
+        .ok_or_else(|| "PTY is not running".to_string())?;
+
+    writer
+        .write_all(data.as_bytes())
+        .map_err(|e| e.to_string())?;
+    writer.flush().map_err(|e| e.to_string())?;
+
     Ok(())
 }
 

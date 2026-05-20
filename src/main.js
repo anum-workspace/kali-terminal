@@ -39,6 +39,7 @@ const fitAddon = new FitAddon();
 term.loadAddon(fitAddon);
 term.open(document.getElementById("terminal"));
 fitAddon.fit();
+term.focus();
 
 const resizePty = () => {
   fitAddon.fit();
@@ -49,16 +50,6 @@ window.addEventListener("resize", resizePty);
 
 // ── PTY communication ────────────────────────────────────
 let currentLine = "";
-
-// Spawn the shell via Tauri command
-invoke("pty_spawn", { cols: term.cols, rows: term.rows })
-  .then(resizePty)
-  .catch((err) => term.writeln(`Error: ${err}`));
-
-// Listen to real‑time output from the shell
-listen("pty-output", (event) => {
-  term.write(event.payload);
-});
 
 // Forward user keystrokes to the PTY
 term.onData((data) => {
@@ -74,4 +65,18 @@ term.onData((data) => {
   } else if (data >= " " && data !== "\u007f") {
     currentLine += data;
   }
+});
+
+async function startTerminal() {
+  // Register output handling before spawning so the first shell prompt is not lost.
+  await listen("pty-output", (event) => {
+    term.write(event.payload);
+  });
+
+  await invoke("pty_spawn", { cols: term.cols, rows: term.rows });
+  resizePty();
+}
+
+startTerminal().catch((err) => {
+  term.writeln(`Error: ${err}`);
 });
