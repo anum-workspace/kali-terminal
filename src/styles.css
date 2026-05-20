@@ -10,12 +10,131 @@ body {
   height: 100%;
   background: transparent;
   overflow: hidden;
+  color: #e6e6e6;
+  font-family: "Fira Code", "Hack Nerd Font", monospace;
 }
 
-#terminal {
+#app-shell {
+  display: grid;
+  grid-template-rows: 34px minmax(0, 1fr);
   width: 100%;
   height: 100%;
   background: rgba(37, 46, 53, 0.95);
+}
+
+#tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 6px 0;
+  background: rgba(24, 31, 36, 0.96);
+  border-bottom: 1px solid rgba(73, 174, 230, 0.22);
+}
+
+#tab-list {
+  display: flex;
+  align-items: end;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+#tab-list::-webkit-scrollbar {
+  height: 3px;
+}
+
+#tab-list::-webkit-scrollbar-thumb {
+  background: rgba(73, 174, 230, 0.38);
+  border-radius: 8px;
+}
+
+.tab,
+#new-tab {
+  border: 1px solid rgba(73, 174, 230, 0.22);
+  background: rgba(31, 37, 43, 0.95);
+  color: #dbe7ee;
+  font: inherit;
+}
+
+.tab {
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 6px;
+  min-width: 118px;
+  max-width: 190px;
+  height: 28px;
+  padding: 0 5px 0 10px;
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+}
+
+.tab.active {
+  background: rgba(37, 46, 53, 1);
+  border-color: rgba(73, 174, 230, 0.48);
+  color: #ffffff;
+}
+
+.tab-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.tab-close,
+#new-tab {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tab-close {
+  border: 0;
+  background: transparent;
+  color: rgba(230, 230, 230, 0.72);
+  font: inherit;
+  line-height: 1;
+}
+
+.tab-close:hover,
+#new-tab:hover {
+  background: rgba(73, 174, 230, 0.18);
+  color: #ffffff;
+}
+
+#new-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+#terminal-host {
+  position: relative;
+  min-height: 0;
+  background: rgba(37, 46, 53, 0.95);
+}
+
+.terminal-pane {
+  display: none;
+  width: 100%;
+  height: 100%;
+}
+
+.terminal-pane.active {
+  display: block;
 }
 
 /* xterm overrides for Kali appearance */

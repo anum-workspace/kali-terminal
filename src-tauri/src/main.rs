@@ -40,6 +40,7 @@ fn main() {
             pty::pty_spawn,
             pty::pty_write,
             pty::pty_resize,
+            pty::pty_close,
             db::add_history,
             db::get_history,
             suggestions::get_suggestions,

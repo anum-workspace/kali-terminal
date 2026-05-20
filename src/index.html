@@ -8,7 +8,13 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div id="terminal"></div>
+    <div id="app-shell">
+      <div id="tab-bar">
+        <div id="tab-list" role="tablist" aria-label="Terminal tabs"></div>
+        <button id="new-tab" type="button" title="New terminal" aria-label="New terminal">+</button>
+      </div>
+      <div id="terminal-host"></div>
+    </div>
     <script type="module" src="./main.js"></script>
   </body>
 </html>
