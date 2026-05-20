@@ -97,6 +97,13 @@ const replaceCurrentLine = async (nextLine) => {
   await updateSuggestion();
 };
 
+const closeAfterShellExitCommand = () => {
+  terminalRunning = false;
+  window.setTimeout(() => {
+    appWindow.close().catch(console.error);
+  }, 100);
+};
+
 // Forward user keystrokes to the PTY
 term.onData((data) => {
   if (!terminalRunning) {
@@ -144,6 +151,10 @@ term.onData((data) => {
     currentLine = "";
     currentSuggestion = "";
     historyIndex = history.length;
+
+    if (submittedLine.trim().toLowerCase() === "exit") {
+      closeAfterShellExitCommand();
+    }
   } else if (data === "\u007f") {
     currentLine = currentLine.slice(0, -1);
     updateSuggestion();
