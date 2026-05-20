@@ -2,6 +2,7 @@ import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import "xterm/css/xterm.css";
 
 // ── Kali‑themed terminal setup ──────────────────────────
@@ -50,20 +51,110 @@ window.addEventListener("resize", resizePty);
 
 // ── PTY communication ────────────────────────────────────
 let currentLine = "";
+let history = [];
+let historyIndex = 0;
+let currentSuggestion = "";
+let terminalRunning = false;
+
+const appWindow = getCurrentWindow();
+
+const writePty = (data) => {
+  if (!terminalRunning) {
+    return Promise.resolve();
+  }
+
+  return invoke("pty_write", { data }).catch((err) => {
+    console.error(err);
+  });
+};
+
+const loadHistory = async () => {
+  history = await invoke("get_history", { limit: 100 }).catch((err) => {
+    console.error(err);
+    return [];
+  });
+  historyIndex = history.length;
+};
+
+const updateSuggestion = async () => {
+  if (!currentLine.trim()) {
+    currentSuggestion = "";
+    return;
+  }
+
+  const suggestions = await invoke("get_suggestions", { currentLine }).catch((err) => {
+    console.error(err);
+    return [];
+  });
+  currentSuggestion = suggestions.find((item) => item !== currentLine) ?? "";
+};
+
+const replaceCurrentLine = async (nextLine) => {
+  const eraseCurrentLine = "\u007f".repeat(currentLine.length);
+  currentLine = nextLine;
+  currentSuggestion = "";
+  await writePty(`${eraseCurrentLine}${nextLine}`);
+  await updateSuggestion();
+};
 
 // Forward user keystrokes to the PTY
 term.onData((data) => {
-  invoke("pty_write", { data }).catch(console.error);
+  if (!terminalRunning) {
+    return;
+  }
+
+  if (data === "\u001b[A") {
+    if (history.length > 0 && historyIndex > 0) {
+      historyIndex -= 1;
+      replaceCurrentLine(history[historyIndex]);
+    }
+    return;
+  }
+
+  if (data === "\u001b[B") {
+    if (historyIndex < history.length - 1) {
+      historyIndex += 1;
+      replaceCurrentLine(history[historyIndex]);
+    } else if (historyIndex < history.length) {
+      historyIndex = history.length;
+      replaceCurrentLine("");
+    }
+    return;
+  }
+
+  if (data === "\t") {
+    if (currentSuggestion && currentSuggestion.startsWith(currentLine)) {
+      const suffix = currentSuggestion.slice(currentLine.length);
+      currentLine = currentSuggestion;
+      currentSuggestion = "";
+      writePty(suffix);
+    } else {
+      writePty(data);
+    }
+    return;
+  }
+
+  writePty(data);
 
   if (data === "\r") {
-    invoke("add_history", { command: currentLine }).catch(console.error);
+    const submittedLine = currentLine;
+    invoke("add_history", { command: submittedLine })
+      .then(loadHistory)
+      .catch(console.error);
     currentLine = "";
+    currentSuggestion = "";
+    historyIndex = history.length;
   } else if (data === "\u007f") {
     currentLine = currentLine.slice(0, -1);
+    updateSuggestion();
   } else if (data === "\u0003" || data === "\u0004") {
     currentLine = "";
+    currentSuggestion = "";
+    historyIndex = history.length;
   } else if (data >= " " && data !== "\u007f") {
     currentLine += data;
+    historyIndex = history.length;
+    updateSuggestion();
   }
 });
 
@@ -72,8 +163,14 @@ async function startTerminal() {
   await listen("pty-output", (event) => {
     term.write(event.payload);
   });
+  await listen("pty-exit", async () => {
+    terminalRunning = false;
+    await appWindow.close();
+  });
 
+  await loadHistory();
   await invoke("pty_spawn", { cols: term.cols, rows: term.rows });
+  terminalRunning = true;
   resizePty();
 }
 

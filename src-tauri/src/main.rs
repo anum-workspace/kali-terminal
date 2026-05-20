@@ -41,6 +41,7 @@ fn main() {
             pty::pty_write,
             pty::pty_resize,
             db::add_history,
+            db::get_history,
             suggestions::get_suggestions,
         ])
         .run(tauri::generate_context!())

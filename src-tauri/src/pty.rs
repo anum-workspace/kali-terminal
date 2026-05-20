@@ -76,6 +76,7 @@ pub async fn pty_spawn(
                 }
             }
         }
+        let _ = window_handle.emit("pty-exit", ());
     });
 
     Ok(())

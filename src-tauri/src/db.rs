@@ -70,3 +70,25 @@ pub fn add_history(state: State<'_, AppState>, command: String) -> Result<(), St
 
     Ok(())
 }
+
+#[command]
+pub fn get_history(state: State<'_, AppState>, limit: i64) -> Result<Vec<String>, String> {
+    let db = state.db.lock().map_err(|_| "Lock poisoned")?;
+    let mut stmt = db
+        .conn
+        .prepare(
+            "SELECT command FROM history
+             ORDER BY id DESC
+             LIMIT ?1",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut commands = stmt
+        .query_map(params![limit.max(1)], |row| row.get(0))
+        .map_err(|e| e.to_string())?
+        .filter_map(|result: Result<String, rusqlite::Error>| result.ok())
+        .collect::<Vec<_>>();
+
+    commands.reverse();
+    Ok(commands)
+}
