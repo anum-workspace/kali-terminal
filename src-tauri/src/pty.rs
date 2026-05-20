@@ -37,13 +37,21 @@ pub async fn pty_spawn(
         })
         .map_err(|e| e.to_string())?;
 
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
-    let mut cmd = CommandBuilder::new(shell);
-    cmd.env("TERM", "xterm-256color");
-    cmd.env("COLORTERM", "truecolor");
+    #[cfg(not(target_os = "windows"))]
+    let cmd = {
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+        let mut cmd = CommandBuilder::new(shell);
+        cmd.env("TERM", "xterm-256color");
+        cmd.env("COLORTERM", "truecolor");
+        cmd
+    };
 
     #[cfg(target_os = "windows")]
-    let mut cmd = CommandBuilder::new("cmd.exe");
+    let cmd = {
+        let mut cmd = CommandBuilder::new("powershell.exe");
+        cmd.arg("-NoLogo");
+        cmd
+    };
 
     let child = pty_pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
     let master = pty_pair.master;
