@@ -39,74 +39,39 @@ const fitAddon = new FitAddon();
 term.loadAddon(fitAddon);
 term.open(document.getElementById("terminal"));
 fitAddon.fit();
-window.addEventListener("resize", () => {
+
+const resizePty = () => {
   fitAddon.fit();
   invoke("pty_resize", { cols: term.cols, rows: term.rows }).catch(console.error);
-});
+};
+
+window.addEventListener("resize", resizePty);
 
 // ── PTY communication ────────────────────────────────────
 let currentLine = "";
-let isCommandRunning = false;
-let promptReady = false;
 
 // Spawn the shell via Tauri command
 invoke("pty_spawn", { cols: term.cols, rows: term.rows })
-  .then(() => term.writeln("Shell connected."))
+  .then(resizePty)
   .catch((err) => term.writeln(`Error: ${err}`));
 
 // Listen to real‑time output from the shell
 listen("pty-output", (event) => {
-  const data = event.payload;
-  // Write directly to the terminal (the shell handles its own prompt)
-  term.write(data);
-
-  // Detect the end of a command by looking for our custom prompt marker
-  if (data.includes("__KALI_PROMPT__")) {
-    isCommandRunning = false;
-    promptReady = true;
-  }
+  term.write(event.payload);
 });
 
 // Forward user keystrokes to the PTY
 term.onData((data) => {
-  // When a command is running, just forward everything
-  if (isCommandRunning) {
-    invoke("pty_write", { data }).catch(console.error);
-    return;
-  }
+  invoke("pty_write", { data }).catch(console.error);
 
-  // If we are at the prompt, handle special keys for suggestions
-  if (promptReady) {
-    if (data === "\r") {
-      // Enter
-      // Execute the command, reset the line buffer
-      invoke("pty_write", { data: currentLine + "\r" }).catch(console.error);
-      invoke("add_history", { command: currentLine }).catch(console.error);
-      currentLine = "";
-      isCommandRunning = true;
-      promptReady = false;
-    } else if (data === "\u007f") {
-      // Backspace
-      if (currentLine.length > 0) {
-        currentLine = currentLine.slice(0, -1);
-        invoke("pty_write", { data: "\b \b" }).catch(console.error);
-      }
-    } else if (data === "\t") {
-      // Tab: accept inline suggestion
-      // The suggestion will be fetched on each keystroke; here we accept it
-      const suggestion = term.getSelection(); // dummy – we'll implement proper suggestion later
-    } else {
-      currentLine += data;
-      invoke("pty_write", { data }).catch(console.error);
-      // Fetch suggestions in real‑time
-      invoke("get_suggestions", { currentLine })
-        .then((suggestions) => {
-          if (suggestions.length > 0) {
-            // Show ghost text using xterm’s decoration (simple version: write dimmed text)
-            // This is a placeholder; full implementation would use decorations API
-          }
-        })
-        .catch(console.error);
-    }
+  if (data === "\r") {
+    invoke("add_history", { command: currentLine }).catch(console.error);
+    currentLine = "";
+  } else if (data === "\u007f") {
+    currentLine = currentLine.slice(0, -1);
+  } else if (data === "\u0003" || data === "\u0004") {
+    currentLine = "";
+  } else if (data >= " " && data !== "\u007f") {
+    currentLine += data;
   }
 });

@@ -24,8 +24,17 @@ impl Database {
                 id INTEGER PRIMARY KEY,
                 prefix TEXT NOT NULL,
                 command TEXT NOT NULL,
-                frequency INTEGER DEFAULT 1
-            );"
+                frequency INTEGER DEFAULT 1,
+                UNIQUE(prefix, command)
+            );
+            DELETE FROM suggestions
+            WHERE id NOT IN (
+                SELECT MIN(id)
+                FROM suggestions
+                GROUP BY prefix, command
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_suggestions_prefix_command
+            ON suggestions(prefix, command);"
         )?;
 
         Ok(Database { conn })
@@ -34,6 +43,11 @@ impl Database {
 
 #[command]
 pub fn add_history(state: State<'_, AppState>, command: String) -> Result<(), String> {
+    let command = command.trim();
+    if command.is_empty() {
+        return Ok(());
+    }
+
     let db = state.db.lock().map_err(|_| "Lock poisoned")?;
     db.conn
         .execute(

@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  root: "src",
   clearScreen: false,
   server: {
     strictPort: true,
@@ -8,6 +9,8 @@ export default defineConfig({
   envPrefix: ["VITE_", "TAURI_"],
   build: {
     target: ["es2021", "chrome100", "safari13"],
+    outDir: "../dist",
+    emptyOutDir: true,
     minify: !process.env.TAURI_DEBUG ? "esbuild" : false,
     sourcemap: !!process.env.TAURI_DEBUG,
   },

@@ -1,7 +1,6 @@
-use portable_pty::{CommandBuilder, PtySize, native_pty_system};
-use std::io::{BufRead, BufReader, Read};
-use std::sync::Mutex;
-use tauri::{command, Emitter, Window, State};
+use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use std::io::Read;
+use tauri::{command, Emitter, State, Window};
 
 use crate::AppState;
 
@@ -36,9 +35,10 @@ pub async fn pty_spawn(
         })
         .map_err(|e| e.to_string())?;
 
-    // Custom prompt to detect command boundaries
-    let mut cmd = CommandBuilder::new("bash");
-    cmd.args(&["-c", "export PS1='\\[\\e]0;__KALI_PROMPT__\\a\\]\\u@\\h:\\w\\$ '; exec bash"]);
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+    let mut cmd = CommandBuilder::new(shell);
+    cmd.env("TERM", "xterm-256color");
+    cmd.env("COLORTERM", "truecolor");
 
     #[cfg(target_os = "windows")]
     let mut cmd = CommandBuilder::new("cmd.exe");
@@ -53,17 +53,18 @@ pub async fn pty_spawn(
     pty.master = Some(master);
     pty._child = Some(child);
 
-    // Spawn a thread to read the PTY output and emit events
+    // Spawn a thread to read raw PTY bytes. Shell prompts usually do not end
+    // with a newline, so line-based reads make the terminal appear frozen.
     let window_handle = window.clone();
     std::thread::spawn(move || {
-        let mut reader = BufReader::new(reader);
-        let mut buf = String::new();
+        let mut reader = reader;
+        let mut buf = [0_u8; 8192];
         loop {
-            match reader.read_line(&mut buf) {
+            match reader.read(&mut buf) {
                 Ok(0) => break, // EOF
-                Ok(_) => {
-                    let _ = window_handle.emit("pty-output", buf.clone());
-                    buf.clear();
+                Ok(n) => {
+                    let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                    let _ = window_handle.emit("pty-output", data);
                 }
                 Err(e) => {
                     let _ = window_handle.emit("pty-output", format!("\r\nRead error: {e}\r\n"));
